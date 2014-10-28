@@ -2,6 +2,9 @@
   (:require [clojure.test :refer :all]
             [webhdfs-clj.core :refer :all]))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(expiration-time "\"u=rratti&p=***REMOVED***&t=kerberos&e=1414469737167&s=xcIyxNley7n0l73qwBo7pjXek0M=\""
+)
+(expired? "\"u=rratti&p=***REMOVED***&t=kerberos&e=1414469737167&s=xcIyxNley7n0l73qwBo7pjXek0M=\"")
+
+;;(authenticate (URL. (str "http://eat1-euchrenn01.grid.linkedin.com:50070/webhdfs/v1/" 
+  ;;                       "data/tracking/EndorsementsSuggestionImpressionEvent/daily/2014/10/06/part-00000.avro?op=OPEN")))
