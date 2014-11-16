@@ -3,44 +3,48 @@
     [webhdfs-clj.util :as u]
     [webhdfs-clj.auth :as a]
     [clojure.data.json :as json]
-            [clojure.java.io :as io]
-            [clojure.string :as s]
-            [clojure.tools.logging :as log]
-            [clj-http.lite.client :as http])
-  (:import [java.io StringWriter]))
+    [clojure.java.io :as io]
+    [clojure.string :as s]
+    [clojure.tools.logging :as log]
+    [clj-http.lite.client :as http])
+  (:import [java.io StringWriter]
+           (clojure.lang Reflector)))
 
 (defn- throw-exception [json-data]
   (let [{:keys [javaClassName message]} (:RemoteException json-data)]
     (throw
-      (clojure.lang.Reflector/invokeConstructor
+      (Reflector/invokeConstructor
         (resolve (symbol javaClassName))
         (to-array [message])))))
+
 
 (defn- remote-exception? [response]
   (contains? response :RemoteException))
 
 (defn- request [method path opts]
-  (println opts)
-  (let [failure? (fn [status] (not (and (>= status 200) (< status 400))))
+  (let [failure? (fn [status]
+                   (and (>= status 400) (<= status 599)))
         query-opts
         (into {} (for [[k v] (:query-params opts) :when (not (nil? v))]
-                   [(name k) (if (keyword? v) (name v) (str v))])) 
-        as (:as opts)
-        {:keys [status body]}
-        (http/request
-          (merge opts
-                 {
-                  :headers (:headers opts)
-                  :method method
-                  :query-params query-opts
-                  :throw-exceptions false
-                  :url (str (u/base-url) path)}))]
-    ;(log/info status body)
-    (if (failure? status)
-      (throw-exception body)
-      (if (= as :json)
-        (json/read-str body :key-fn keyword)
-        body))))
+                   [(name k) (if (keyword? v)
+                               (name v)
+                               (str v))]))]
+    (log/info "Executing request, method:" method ", path:" path ", query:" query-opts)
+    (let [{:keys [status body]}
+          (http/request
+            (merge opts
+                   {:headers      (:headers opts)
+                    :method       method
+                    :throw-exceptions false
+                    :query-params query-opts
+                    :url          (str (u/base-url) path)}))]
+      (log/info "Received status: " status)
+      (if (failure? status)
+        (throw-exception
+          (json/read-str body :key-fn keyword))
+        (if (= (:as opts) :json)
+          (json/read-str body :key-fn keyword)
+          body)))))
 
 (defn- http-get [path query-opts & {:keys [as] :or {as :json}}]
   (request :get path {:as as :query-params query-opts}))
@@ -51,11 +55,14 @@
 (defn- http-post [path query-opts & {:keys [as] :or {as :json}}]
   (request :post path {:as as :query-params query-opts}))
 
-(defn create 
+(defn- http-delete [path query-opts & {:keys [as] :or {as :json}}]
+  (request :delete path {:as as :query-params query-opts}))
+
+(defn create
   [path [& {:keys [overwrite block-size replication permission buffer-size]}]]
-  (request :put path 
-    {:op :create :overwrite overwrite :blocksize block-size 
-     :replication replication :permission permission :buffersize buffer-size}))     
+  (request :put path
+           {:op          :create :overwrite overwrite :blocksize block-size
+            :replication replication :permission permission :buffersize buffer-size}))
 
 (defn append [path [& {:keys [buffer-size]}]]
   (request :post path {:op :append :buffersize buffer-size}))
@@ -72,16 +79,17 @@
     (:boolean r)))
 
 (defn rename [path destination]
-  (let [r (http-put path {:op :rename})]
+  (let [r (http-put path {:op :rename :destination destination})]
     (:boolean r)))
 
 (defn delete [path & {:keys [recursive] :or {recursive false}}]
-  (let [r (http-put path {:op :delete :recursive recursive})]
+  (let [r (http-delete path {:op :delete :recursive recursive})]
     (:boolean r)))
 
 (defn get-file-status [path]
- (let [r (http-get path {:op :getfilestatus})]
-  (get-in [:FileStatuses :FileStatus]))) 
+  (let [r (http-get path {:op :getfilestatus})]
+    (println r)
+    (get r :FileStatus)))
 
 (defn list-status [path]
   (http-get path {:op :liststatus}))
@@ -106,7 +114,7 @@
     (:boolean r)))
 
 (defn set-times
-  [& {:keys [modification-time access-time]}] 
+  [& {:keys [modification-time access-time]}]
   (http-put {:op :settimes :modificationtime modification-time :accesstime access-time})
   'ok)
 

@@ -1,5 +1,5 @@
 {
- :host "eat1-magicnn01.grid.linkedin.com"
+ :host "***REMOVED***"
  :port 50070
  :secure? true
  :user "***REMOVED***"

@@ -5,9 +5,4 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/data.json "0.2.5"]
                  [org.clojure/tools.logging "0.3.1"]
-;                 [http-kit "2.1.18"]
-
-                 ;[clj-http "1.0.0" :exclusions
-                 ;[cheshire crouton org.clojure/tools.reader]
-                 [clj-http-lite "0.2.0"]
-                  ])
+                 [clj-http-lite "0.2.0"]])
