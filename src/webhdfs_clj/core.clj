@@ -33,11 +33,11 @@
     (let [{:keys [status body]}
           (http/request
             (merge opts
-                   {:headers      (:headers opts)
-                    :method       method
+                   {:headers          (:headers opts)
+                    :method           method
                     :throw-exceptions false
-                    :query-params query-opts
-                    :url          (str (u/base-url) path)}))]
+                    :query-params     query-opts
+                    :url              (str (u/base-url) path)}))]
       (log/info "Received status: " status)
       (if (failure? status)
         (throw-exception
@@ -59,10 +59,14 @@
   (request :delete path {:as as :query-params query-opts}))
 
 (defn create
-  [path [& {:keys [overwrite block-size replication permission buffer-size]}]]
+  [path & [{:keys [overwrite block-size replication permission buffer-size]}]]
   (request :put path
-           {:op          :create :overwrite overwrite :blocksize block-size
-            :replication replication :permission permission :buffersize buffer-size}))
+           {:op          :create
+            :overwrite   overwrite
+            :blocksize   block-size
+            :replication replication
+            :permission  permission
+            :buffersize  buffer-size}))
 
 (defn append [path [& {:keys [buffer-size]}]]
   (request :post path {:op :append :buffersize buffer-size}))
@@ -115,21 +119,21 @@
 
 (defn set-times
   [& {:keys [modification-time access-time]}]
-  (http-put {:op :settimes :modificationtime modification-time :accesstime access-time})
+  (http-put "/" {:op :settimes :modificationtime modification-time :accesstime access-time})
   'ok)
 
 (defn get-delegation-token [renewer]
-  (let [r (http-get {:op :getdelegationtoken :renewer renewer})]
-    (:urlString r)))
+  (let [r (http-get "/" {:op :getdelegationtoken :renewer renewer})]
+    (get-in r [:Token :urlString])))
 
 (defn get-delegation-tokens [renewer]
-  (let [r (http-get {:op :getdelegationtokens :renewer renewer})]
+  (let [r (http-get "/" {:op :getdelegationtokens :renewer renewer})]
     (map :urlString (get-in r [:Tokens :token]))))
 
 (defn renew-delegation-token [token]
-  (let [r (http-put {:op :renewdelegationtoken :token token})]
+  (let [r (http-put "/" {:op :renewdelegationtoken :token token})]
     (:long r)))
 
 (defn cancel-delegation-token [token]
-  (http-put {:op :canceldelegationtoken :token token})
+  (http-put "/" {:op :canceldelegationtoken :token token})
   'ok)
