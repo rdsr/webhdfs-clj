@@ -9,9 +9,9 @@
       (read rdr))))
 
 (def ^:private cfg-state (atom (read-cfg)))
-(defn cfg 
+(defn cfg
   ([] @cfg-state)
-  ([key] (get cfg key)))
+  ([key] (get @cfg-state key)))
 
 ;; mostly for development
 (def set-cfg! (partial swap! cfg-state))
@@ -19,5 +19,5 @@
   (reset! cfg-state (read-cfg)))
 
 (defn base-url []
-  (let [{:keys [host port]} (u/cfg)]
+  (let [{:keys [host port]} (cfg)]
     (str "http://" host ":" port "/webhdfs/v1")))

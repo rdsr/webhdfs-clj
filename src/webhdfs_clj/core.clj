@@ -1,14 +1,13 @@
 (ns webhdfs-clj.core
-  (:require [clojure.data.json :as json]
+  (:require
+    [webhdfs-clj.util :as u]
+    [webhdfs-clj.auth :as a]
+    [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as s]
             [clojure.tools.logging :as log]
-            [clj-http.client :as http])
+            [clj-http.lite.client :as http])
   (:import [java.io StringWriter]))
-
-(defn- base-url []
-  (let [{:keys [host port]} conf]
-    (str "http://" host ":" port "/webhdfs/v1")))
 
 (defn- throw-exception [json-data]
   (let [{:keys [javaClassName message]} (:RemoteException json-data)]
@@ -21,6 +20,7 @@
   (contains? response :RemoteException))
 
 (defn- request [method path opts]
+  (println opts)
   (let [failure? (fn [status] (not (and (>= status 200) (< status 400))))
         query-opts
         (into {} (for [[k v] (:query-params opts) :when (not (nil? v))]
@@ -29,12 +29,12 @@
         {:keys [status body]}
         (http/request
           (merge opts
-                 {:debug (:http-debug conf)
-                  :headers (assoc (:headers opts) :cookie (get-cookie!))
+                 {
+                  :headers (:headers opts)
                   :method method
                   :query-params query-opts
                   :throw-exceptions false
-                  :url (str (base-url) path)}))]
+                  :url (str (u/base-url) path)}))]
     ;(log/info status body)
     (if (failure? status)
       (throw-exception body)
@@ -42,13 +42,13 @@
         (json/read-str body :key-fn keyword)
         body))))
 
-(defn- http-get [path query-opts & {:keys [as] :or {or :json}}]
+(defn- http-get [path query-opts & {:keys [as] :or {as :json}}]
   (request :get path {:as as :query-params query-opts}))
 
-(defn- http-put [path query-opts & {:keys [as] :or {or :json}}]
+(defn- http-put [path query-opts & {:keys [as] :or {as :json}}]
   (request :put path {:as as :query-params query-opts}))
 
-(defn- http-post [path query-opts & {:keys [as] :or {or :json}}]
+(defn- http-post [path query-opts & {:keys [as] :or {as :json}}]
   (request :post path {:as as :query-params query-opts}))
 
 (defn create 
