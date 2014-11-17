@@ -7,14 +7,21 @@
     [clojure.string :as s]
     [clojure.tools.logging :as log]
     [clj-http.lite.client :as http])
-  (:import [java.io StringWriter]
+  (:import [java.io StringWriter IOException]
            (clojure.lang Reflector)))
+
+(defn- resolve-class [class-name]
+  (try
+    (resolve (symbol class-name))
+    (catch ClassNotFoundException e
+      (log/warn "Could not resolve class" class-name ". Using IOException instead")
+      IOException)))
 
 (defn- throw-exception [json-data]
   (let [{:keys [javaClassName message]} (:RemoteException json-data)]
     (throw
       (Reflector/invokeConstructor
-        (resolve (symbol javaClassName))
+        (resolve-class javaClassName)
         (to-array [message])))))
 
 
@@ -92,11 +99,11 @@
 
 (defn get-file-status [path]
   (let [r (http-get path {:op :getfilestatus})]
-    (println r)
     (get r :FileStatus)))
 
 (defn list-status [path]
-  (http-get path {:op :liststatus}))
+  (let [r (http-get path {:op :liststatus})]
+    (get-in r [:FileStatuses :FileStatus])))
 
 (defn get-content-summary [path]
   (http-get path {:op :getcontentsummary}))
@@ -108,7 +115,8 @@
   (http-get "/" {:op :gethomedirectory}))
 
 (defn set-permission [path permission]
-  (http-put path {:op :setpermission :permission permission}))
+  (http-put path {:op :setpermission :permission permission} :as :utf-8)
+  'ok)
 
 (defn set-owner [& {:keys [owner group]}]
   (http-put "/" {:op :setowner :owner owner :group group}))
