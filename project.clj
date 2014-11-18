@@ -5,4 +5,4 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/data.json "0.2.5"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [clj-http-lite "0.2.0"]])
+                 [org.clojars.rdsr/clj-http-lite "0.2.1-SNAPSHOT"]])

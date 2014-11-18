@@ -1,3 +1,4 @@
 * Test out proxy users
 * Test out delegation tokens
 *
+http://download.oracle.com/otn-pub/java/jce/7/UnlimitedJCEPolicyJDK7.zip

@@ -1,4 +1,5 @@
 (ns webhdfs-clj.core
+  (:refer-clojure :exclude [concat])
   (:require
     [webhdfs-clj.util :as u]
     [webhdfs-clj.auth :as a]
@@ -23,7 +24,6 @@
       (Reflector/invokeConstructor
         (resolve-class javaClassName)
         (to-array [message])))))
-
 
 (defn- remote-exception? [response]
   (contains? response :RemoteException))
@@ -75,10 +75,10 @@
             :permission  permission
             :buffersize  buffer-size}))
 
-(defn append [path [& {:keys [buffer-size]}]]
-  (request :post path {:op :append :buffersize buffer-size}))
+(defn append [path & {:keys [buffer-size]}]
+  (http-post path {:op :append :buffersize buffer-size} :as :stream))
 
-(defn xconcat [path sources]
+(defn concat [path sources]
   (request :post path {:op concat :sources (clojure.string/join "," sources)}))
 
 (defn mkdir [path & {:keys [permission]}]
@@ -86,7 +86,7 @@
     (:boolean r)))
 
 (defn create-symlink [path destination & {:keys [createParent] :or {createParent false}}]
-  (let [r (http-put path {:op :createsymlink :createParent createParent})]
+  (let [r (http-put path {:op :createsymlink :destination destination :createParent createParent} :as :byte-array)]
     (:boolean r)))
 
 (defn rename [path destination]
@@ -109,25 +109,29 @@
   (http-get path {:op :getcontentsummary}))
 
 (defn get-file-checksum [path]
-  (http-get path {:op :getfilechecksum}))
+  (let [r (http-get path {:op :getfilechecksum})]
+    (:FileChecksum r)))
 
 (defn get-home-directory []
-  (http-get "/" {:op :gethomedirectory}))
+  (let [r (http-get "/" {:op :gethomedirectory})]
+    (:Path r)))
 
 (defn set-permission [path permission]
-  (http-put path {:op :setpermission :permission permission} :as :utf-8)
+  (http-put path {:op :setpermission :permission permission} :as :byte-array)
   'ok)
 
-(defn set-owner [& {:keys [owner group]}]
-  (http-put "/" {:op :setowner :owner owner :group group}))
+(defn set-owner [path & {:keys [owner group]}]
+  ;; owner and group are optional in webhdfs rest-api spec
+  (http-put path {:op :setowner :owner owner :group group}))
 
-(defn set-replication [& {:keys [replication]}]
-  (let [r (http-put "/" {:op :setreplication :replication replication})]
+(defn set-replication [path & {:keys [replication]}]
+  ;; replication is optional in webhdfs rest-api spec
+  (let [r (http-put path {:op :setreplication :replication replication})]
     (:boolean r)))
 
 (defn set-times
-  [& {:keys [modification-time access-time]}]
-  (http-put "/" {:op :settimes :modificationtime modification-time :accesstime access-time})
+  [path & {:keys [modification-time access-time]}]
+  (http-put path {:op :settimes :modificationtime modification-time :accesstime access-time} :as :byte-array)
   'ok)
 
 (defn get-delegation-token [renewer]
