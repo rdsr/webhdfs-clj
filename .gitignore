@@ -9,9 +9,10 @@
 /.nrepl-port
 /checkouts
 /classes
-/conf/*.conf
-/conf/*.keytab
-/conf/config.clj
+conf/user.conf
+conf/headless.conf
+conf/*.keytab
+conf/config.clj
 /target
 pom.xml
 pom.xml.asc

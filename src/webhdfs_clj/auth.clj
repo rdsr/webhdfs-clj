@@ -15,14 +15,17 @@
     (do (log/info "No user credentials provided in configuration")
         false)))
 
-(CookieHandler/setDefault (CookieManager.))
-(when (credentials?)
-  (Authenticator/setDefault
-    (proxy [Authenticator] []
-      (getPasswordAuthentication []
-        (log/info "Registering password authentication for user: " (u/cfg :user))
-        (PasswordAuthentication.
-          (u/cfg :user)
-          (into-array Character/TYPE (u/cfg :password)))))))
+(defn set-auth-mechanism! []
+  (CookieHandler/setDefault (CookieManager.))
+  (when (credentials?)
+    (Authenticator/setDefault
+      (proxy [Authenticator] []
+        (getPasswordAuthentication []
+          (log/info "Registering password authentication for user: " (u/cfg :user))
+          (PasswordAuthentication.
+            (u/cfg :user)
+            (into-array Character/TYPE (u/cfg :password))))))))
+
+
 
 
