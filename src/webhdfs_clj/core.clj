@@ -3,12 +3,15 @@
   (:require
     [webhdfs-clj.util :as u]
     [webhdfs-clj.auth :as a]
+    [clojure.java.io :as io]
     [clojure.string :as s]
     [clojure.data.json :as json]
     [clojure.tools.logging :as log]
-    [clj-http.lite.client :as http])
+    [clj-http.lite.client :as http]
+    [clojure.java.io :as io])
   (:import [java.io IOException]
-           [clojure.lang Reflector]))
+           [clojure.lang Reflector]
+           (java.net URI URL)))
 
 ;; setup authentication
 (a/setup-auth!)
@@ -27,23 +30,28 @@
         (resolve-class javaClassName)
         (to-array [message])))))
 
-(defn- request [method path opts]
-  (let [failure? (complement http/unexceptional-status?)
+(defn- abs-url [uri]
+  (let [uri (URI. uri)]
+    (if (.isAbsolute uri)
+      (.toURL uri)
+      (URL. (str (u/base-url) (.getPath uri))))))
+
+(defn- request [method uri opts]
+  (let [url (abs-url uri)
+        failure? (complement http/unexceptional-status?)
         query-opts
         (into {} (for [[k v] (:query-params opts) :when (not (nil? v))]
-                   [(name k) (if (keyword? v)
-                               (name v)
-                               (str v))]))]
-    (log/info "Executing request, method:" method ", path:" path ", query:" query-opts)
+                   [(name k) (if (keyword? v) (name v) (str v))]))]
+    (log/info "Executing request, method:" method ", uri:" uri ", query:" query-opts)
     (let [{:keys [status body headers]}
           (http/request
-            (merge {:headers          (:headers opts)
+            (merge opts
+                   {:headers          (:headers opts)
                     :method           method
                     :follow-redirects false
                     :throw-exceptions false
                     :query-params     query-opts
-                    :url              (str (u/base-url) path)}
-                   opts))]
+                    :url              url}))]
       (log/info "Received status: " status)
       (cond
         (failure? status) (throw-exception (json/read-str body :key-fn keyword))
@@ -53,17 +61,18 @@
         (= (:as opts) :json) (json/read-str body :key-fn keyword)
         :else body))))
 
-(defn- http-get [path query-opts & {:keys [as] :or {as :json}}]
-  (request :get path {:as as :query-params query-opts}))
 
-(defn- http-put [path query-opts & {:keys [as] :or {as :json}}]
-  (request :put path {:as as :query-params query-opts}))
+(defn- http-get [uri query-opts & {:as opts}]
+  (request :get uri (merge {:as :json} opts {:query-params query-opts})))
 
-(defn- http-post [path query-opts & {:keys [as] :or {as :json}}]
-  (request :post path {:as as :query-params query-opts}))
+(defn- http-put [uri query-opts & {:as opts}]
+  (request :put uri (merge {:as :json} opts {:query-params query-opts})))
 
-(defn- http-delete [path query-opts & {:keys [as] :or {as :json}}]
-  (request :delete path {:as as :query-params query-opts}))
+(defn- http-post [uri query-opts & {:as opts}]
+  (request :post uri (merge {:as :json} opts {:query-params query-opts})))
+
+(defn- http-delete [uri query-opts & {:keys [as] :or {as :json} :as opts}]
+  (request :delete uri (merge {:as :json} opts {:query-params  query-opts})))
 
 (defn- parse-url [url]
   (let [{:keys [scheme server-name server-port uri query-string]} (http/parse-url url)]
@@ -71,82 +80,82 @@
           (when server-port (str ":" server-port))
           uri)
      (when query-string
-       (into {} (map (fn [e] (s/split e #"=")) (s/split query-string #"&"))))])
-
+       (into {} (map (fn [e] (s/split e #"=")) (s/split query-string #"&"))))]))
 
 (defn create
-  [path entity & {:keys [encoding length overwrite block-size replication permission buffer-size]}]
-  (let [url (http-put path
-                    {:op          :create
-                     :overwrite   overwrite
-                     :blocksize   block-size
-                     :replication replication
-                     :permission  permission
-                     :buffersize  buffer-size})
-        query-params (parse-url url)]
-    (http-put path
-              (merge query-params
-                     {:body entity
-                      :body-encoding encoding
-                      :length length}))))
+  [uri entity & {:keys [encoding length overwrite block-size replication permission buffer-size]}]
+  (let [url (http-put uri
+                      {:op          :create
+                       :overwrite   overwrite
+                       :blocksize   block-size
+                       :replication replication
+                       :permission  permission
+                       :buffersize  buffer-size})
+        [url query-params] (parse-url url)]
+    (http-put url
+              query-params
+              :body entity
+              :body-encoding encoding
+              :length length)
+    'ok))
 
-(defn append [path & {:keys [buffer-size]}]
-  (http-post path {:op :append :buffersize buffer-size}))
+(defn append [uri & {:keys [buffer-size]}]
+  (http-post uri {:op :append :buffersize buffer-size}))
 
-(defn concat [path sources]
-  (request :post path {:op concat :sources (clojure.string/join "," sources)}))
+(defn concat [uri sources]
+  (request :post uri {:op concat :sources (clojure.string/join "," sources)}))
 
-(defn mkdir [path & {:keys [permission]}]
-  (let [r (http-put path {:op :mkdirs :permission permission})]
+(defn mkdir [uri & {:keys [permission]}]
+  (let [r (http-put uri {:op :mkdirs :permission permission})]
     (:boolean r)))
 
-(defn create-symlink [path destination & {:keys [createParent] :or {createParent false}}]
-  (let [r (http-put path {:op :createsymlink :destination destination :createParent createParent} :as :byte-array)]
+(defn create-symlink [uri destination & {:keys [createParent] :or {createParent false}}]
+  (let [r (http-put uri {:op :createsymlink :destination destination :createParent createParent} :as :byte-array)]
     (:boolean r)))
 
-(defn rename [path destination]
-  (let [r (http-put path {:op :rename :destination destination})]
+(defn rename [uri destination]
+  (let [r (http-put uri {:op :rename :destination destination})]
     (:boolean r)))
 
-(defn delete [path & {:keys [recursive] :or {recursive false}}]
-  (let [r (http-delete path {:op :delete :recursive recursive})]
+(defn delete [uri & {:keys [recursive] :or {recursive false}}]
+  (let [r (http-delete uri {:op :delete :recursive recursive})]
     (:boolean r)))
 
-(defn get-file-status [path]
-  (let [r (http-get path {:op :getfilestatus})]
+(defn get-file-status [uri]
+  (let [r (http-get uri {:op :getfilestatus})]
     (get r :FileStatus)))
 
-(defn list-status [path]
-  (let [r (http-get path {:op :liststatus})]
+(defn list-status [uri]
+  (let [r (http-get uri {:op :liststatus})]
     (get-in r [:FileStatuses :FileStatus])))
 
-(defn get-content-summary [path]
-  (http-get path {:op :getcontentsummary}))
+(defn get-content-summary [uri]
+  (http-get uri {:op :getcontentsummary}))
 
-(defn get-file-checksum [path]
-  (let [r (http-get path {:op :getfilechecksum})]
+(defn get-file-checksum [uri]
+  (let [r (http-get uri {:op :getfilechecksum})]
     (:FileChecksum r)))
 
 (defn get-home-directory []
   (let [r (http-get "/" {:op :gethomedirectory})]
-    (:Path r)))
+    (:uri r)))
 
-(defn set-permission [path permission]
-  (http-put path {:op :setpermission :permission permission} :as :byte-array)
+(defn set-permission [uri permission]
+  (http-put uri {:op :setpermission :permission permission} :as :byte-array)
   'ok)
 
-(defn set-owner [path & {:keys [owner group]}]
+(defn set-owner [uri & {:keys [owner group]}]
   ;; owner and group are optional in webhdfs rest-api spec
-  (http-put path {:op :setowner :owner owner :group group}))
+  (http-put uri {:op :setowner :owner owner :group group}))
 
-(defn set-replication [path & {:keys [replication]}]
+(defn set-replication [uri & {:keys [replication]}]
   ;; replication is optional in webhdfs rest-api spec
-  (let [r (http-put path {:op :setreplication :replication replication})]
+  (let [r (http-put uri {:op :setreplication :replication replication})]
     (:boolean r)))
 
 (defn set-times
-  [path & {:keys [modification-time access-time]}]
-  (http-put path {:op :settimes :modificationtime modification-time :accesstime access-time} :as :byte-array)
+  [uri & {:keys [modification-time access-time]}]
+  (http-put uri {:op :settimes :modificationtime modification-time :accesstime access-time} :as :byte-array)
   'ok)
 
 (defn get-delegation-token [renewer]
