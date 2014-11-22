@@ -83,7 +83,7 @@
        (into {} (map (fn [e] (s/split e #"=")) (s/split query-string #"&"))))]))
 
 (defn create
-  [uri entity & {:keys [encoding length overwrite block-size replication permission buffer-size]}]
+  [uri entity & {:keys [encoding overwrite block-size replication permission buffer-size]}]
   (let [url (http-put uri
                       {:op          :create
                        :overwrite   overwrite
@@ -96,14 +96,18 @@
               query-params
               :body entity
               :body-encoding encoding
-              :length length)
+              :as :string)
     'ok))
 
-(defn append [uri & {:keys [buffer-size]}]
-  (http-post uri {:op :append :buffersize buffer-size}))
+(defn append [uri entity & {:keys [encoding buffer-size]}]
+  (let [url (http-post uri {:op :append :buffersize buffer-size})
+        [url query-params] (parse-url url)]
+    (http-post url query-params :body entity :body-encoding encoding :as :string))
+  'ok)
 
 (defn concat [uri sources]
-  (request :post uri {:op concat :sources (clojure.string/join "," sources)}))
+  (http-post uri {:op :concat :sources (s/join "," sources)})
+  'ok)
 
 (defn mkdir [uri & {:keys [permission]}]
   (let [r (http-put uri {:op :mkdirs :permission permission})]
