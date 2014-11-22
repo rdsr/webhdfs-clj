@@ -3,11 +3,12 @@
     [webhdfs-clj.util :as u]
     [clojure.tools.logging :as log])
   (:import
-    [java.net CookieHandler CookieManager URL HttpURLConnection
-              Authenticator PasswordAuthentication]
-    (java.util Date Calendar)))
+    [java.net CookieHandler CookieManager Authenticator PasswordAuthentication]))
 
-(defn- credentials? []
+(defn- user-creds?
+  "Returns true if user (principal) and passwords are
+  provided in config file."
+  []
   (if (and
         (contains? (u/cfg) :user)
         (contains? (u/cfg) :password))
@@ -15,9 +16,11 @@
     (do (log/info "No user credentials provided in configuration")
         false)))
 
-(defn set-auth-mechanism! []
+(defn setup-auth! []
+  ;; setup default cookie manger for cookies
+  ;; provided by the webhdfs rest service
   (CookieHandler/setDefault (CookieManager.))
-  (when (credentials?)
+  (when (user-creds?)
     (Authenticator/setDefault
       (proxy [Authenticator] []
         (getPasswordAuthentication []
@@ -26,6 +29,4 @@
             (u/cfg :user)
             (into-array Character/TYPE (u/cfg :password))))))))
 
-
-
-
+;(setup-auth!)

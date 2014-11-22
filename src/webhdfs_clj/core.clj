@@ -3,18 +3,20 @@
   (:require
     [webhdfs-clj.util :as u]
     [webhdfs-clj.auth :as a]
-    [clojure.data.json :as json]
-    [clojure.java.io :as io]
     [clojure.string :as s]
+    [clojure.data.json :as json]
     [clojure.tools.logging :as log]
     [clj-http.lite.client :as http])
-  (:import [java.io StringWriter IOException]
-           (clojure.lang Reflector)))
+  (:import [java.io IOException]
+           [clojure.lang Reflector]))
+
+;; setup authentication
+(a/setup-auth!)
 
 (defn- resolve-class [class-name]
   (try
     (resolve (symbol class-name))
-    (catch ClassNotFoundException e
+    (catch ClassNotFoundException _
       (log/warn "Could not resolve class" class-name ". Using IOException instead")
       IOException)))
 
@@ -25,33 +27,31 @@
         (resolve-class javaClassName)
         (to-array [message])))))
 
-(defn- remote-exception? [response]
-  (contains? response :RemoteException))
-
 (defn- request [method path opts]
-  (let [failure? (fn [status]
-                   (and (>= status 400) (<= status 599)))
+  (let [failure? (complement http/unexceptional-status?)
         query-opts
         (into {} (for [[k v] (:query-params opts) :when (not (nil? v))]
                    [(name k) (if (keyword? v)
                                (name v)
                                (str v))]))]
     (log/info "Executing request, method:" method ", path:" path ", query:" query-opts)
-    (let [{:keys [status body]}
+    (let [{:keys [status body headers]}
           (http/request
-            (merge opts
-                   {:headers          (:headers opts)
+            (merge {:headers          (:headers opts)
                     :method           method
+                    :follow-redirects false
                     :throw-exceptions false
                     :query-params     query-opts
-                    :url              (str (u/base-url) path)}))]
+                    :url              (str (u/base-url) path)}
+                   opts))]
       (log/info "Received status: " status)
-      (if (failure? status)
-        (throw-exception
-          (json/read-str body :key-fn keyword))
-        (if (= (:as opts) :json)
-          (json/read-str body :key-fn keyword)
-          body)))))
+      (cond
+        (failure? status) (throw-exception (json/read-str body :key-fn keyword))
+        ;; Webhdfs REST API only gives TEMPORARY_REDIRECT. In this case
+        ;; pass url back so that a proper request can be made
+        (= status 307) (headers "location")
+        (= (:as opts) :json) (json/read-str body :key-fn keyword)
+        :else body))))
 
 (defn- http-get [path query-opts & {:keys [as] :or {as :json}}]
   (request :get path {:as as :query-params query-opts}))
@@ -65,18 +65,33 @@
 (defn- http-delete [path query-opts & {:keys [as] :or {as :json}}]
   (request :delete path {:as as :query-params query-opts}))
 
+(defn- parse-url [url]
+  (let [{:keys [scheme server-name server-port uri query-string]} (http/parse-url url)]
+    [(str (name scheme) "://" server-name
+          (when server-port (str ":" server-port))
+          uri)
+     (when query-string
+       (into {} (map (fn [e] (s/split e #"=")) (s/split query-string #"&"))))])
+
+
 (defn create
-  [path & [{:keys [overwrite block-size replication permission buffer-size]}]]
-  (request :put path
-           {:op          :create
-            :overwrite   overwrite
-            :blocksize   block-size
-            :replication replication
-            :permission  permission
-            :buffersize  buffer-size}))
+  [path entity & {:keys [encoding length overwrite block-size replication permission buffer-size]}]
+  (let [url (http-put path
+                    {:op          :create
+                     :overwrite   overwrite
+                     :blocksize   block-size
+                     :replication replication
+                     :permission  permission
+                     :buffersize  buffer-size})
+        query-params (parse-url url)]
+    (http-put path
+              (merge query-params
+                     {:body entity
+                      :body-encoding encoding
+                      :length length}))))
 
 (defn append [path & {:keys [buffer-size]}]
-  (http-post path {:op :append :buffersize buffer-size} :as :stream))
+  (http-post path {:op :append :buffersize buffer-size}))
 
 (defn concat [path sources]
   (request :post path {:op concat :sources (clojure.string/join "," sources)}))
