@@ -1,17 +1,16 @@
 (ns webhdfs-clj.core
   (:refer-clojure :exclude [concat])
-  (:require
-    [webhdfs-clj.util :as u]
-    [webhdfs-clj.auth :as a]
-    [clojure.java.io :as io]
-    [clojure.string :as s]
-    [clojure.data.json :as json]
-    [clojure.tools.logging :as log]
-    [clj-http.lite.client :as http]
-    [clojure.java.io :as io])
-  (:import [java.io IOException]
-           [clojure.lang Reflector]
-           (java.net URI URL)))
+  (:require [clj-http.lite.client :as http]
+            [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.java.io :as io]
+            [clojure.string :as s]
+            [clojure.tools.logging :as log]
+            [webhdfs-clj.auth :as a]
+            [webhdfs-clj.util :as u])
+  (:import (clojure.lang Reflector)
+           (java.net URI URL)
+           (java.io IOException)))
 
 ;; setup authentication
 (a/setup-auth!)
