@@ -45,13 +45,11 @@
     (log/info "Executing request, method:" method ", uri:" uri ", query:" query-opts)
     (let [{:keys [status body headers]}
           (http/request
-            (merge opts
-                   {:headers          (:headers opts)
-                    :method           method
+            (merge {:method           method
                     :follow-redirects false
                     :throw-exceptions false
-                    :query-params     query-opts
-                    :url              url}))]
+                    :url              url}
+                   (assoc opts :query-params query-opts)))]
       (log/info "Received status: " status)
       (cond
         (failure? status)
@@ -86,6 +84,12 @@
 
 ;; Webhdfs REST API methods
 ;; See http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/WebHDFS.html
+
+(defn open [uri {:keys [offset length buffersize]}]
+  (http-get uri
+            {:op :open :offset offset :length length :buffersize buffersize}
+            :as :stream
+            :follow-redirects true))
 
 (defn create
   [uri entity & {:keys [encoding overwrite block-size replication permission buffer-size]}]
