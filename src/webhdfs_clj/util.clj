@@ -13,11 +13,11 @@
   ([] @cfg-state)
   ([key] (get @cfg-state key)))
 
+(defn base-url []
+  (let [{:keys [host port]} (cfg)]
+    (str "http://" host ":" port "/webhdfs/v1")))
+
 ;; mostly for development
 (def set-cfg! (partial swap! cfg-state))
 (defn reset-cfg! []
   (reset! cfg-state (read-cfg)))
-
-(defn base-url []
-  (let [{:keys [host port]} (cfg)]
-    (str "http://" host ":" port "/webhdfs/v1")))

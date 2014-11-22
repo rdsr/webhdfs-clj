@@ -2,8 +2,6 @@
   (:refer-clojure :exclude [concat])
   (:require [clj-http.lite.client :as http]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]
-            [clojure.java.io :as io]
             [clojure.string :as s]
             [clojure.tools.logging :as log]
             [webhdfs-clj.auth :as a]
@@ -35,12 +33,15 @@
       (.toURL uri)
       (URL. (str (u/base-url) (.getPath uri))))))
 
+(defn- query-params-as-strings
+  [opts]
+  (into {} (for [[k v] opts :when (not (nil? v))]
+             [(name k) (if (keyword? v) (name v) (str v))])))
+
 (defn- request [method uri opts]
   (let [url (abs-url uri)
         failure? (complement http/unexceptional-status?)
-        query-opts
-        (into {} (for [[k v] (:query-params opts) :when (not (nil? v))]
-                   [(name k) (if (keyword? v) (name v) (str v))]))]
+        query-opts (-> opts :query-params query-params-as-strings)]
     (log/info "Executing request, method:" method ", uri:" uri ", query:" query-opts)
     (let [{:keys [status body headers]}
           (http/request
@@ -53,13 +54,15 @@
                     :url              url}))]
       (log/info "Received status: " status)
       (cond
-        (failure? status) (throw-exception (json/read-str body :key-fn keyword))
-        ;; Webhdfs REST API only gives TEMPORARY_REDIRECT. In this case
-        ;; pass url back so that a proper request can be made
+        (failure? status)
+        (throw-exception (json/read-str body :key-fn keyword))
+        ;; Webhdfs REST API only returns TEMPORARY_REDIRECT in
+        ;; cases of PUT and APPEND. In these cases, we pass
+        ;; url back so that a separate request can we made
+        ;; to the right datanode (specified in the redirected url)
         (= status 307) (headers "location")
         (= (:as opts) :json) (json/read-str body :key-fn keyword)
         :else body))))
-
 
 (defn- http-get [uri query-opts & {:as opts}]
   (request :get uri (merge {:as :json} opts {:query-params query-opts})))
@@ -71,7 +74,7 @@
   (request :post uri (merge {:as :json} opts {:query-params query-opts})))
 
 (defn- http-delete [uri query-opts & {:keys [as] :or {as :json} :as opts}]
-  (request :delete uri (merge {:as :json} opts {:query-params  query-opts})))
+  (request :delete uri (merge {:as :json} opts {:query-params query-opts})))
 
 (defn- parse-url [url]
   (let [{:keys [scheme server-name server-port uri query-string]} (http/parse-url url)]
@@ -81,8 +84,13 @@
      (when query-string
        (into {} (map (fn [e] (s/split e #"=")) (s/split query-string #"&"))))]))
 
+;; Webhdfs REST API methods
+;; See http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/WebHDFS.html
+
 (defn create
   [uri entity & {:keys [encoding overwrite block-size replication permission buffer-size]}]
+  ;; I can't get HTTURlConnection to properly do redirect
+  ;; with PUT body, hence doing it manually here.
   (let [url (http-put uri
                       {:op          :create
                        :overwrite   overwrite
