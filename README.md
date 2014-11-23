@@ -23,25 +23,31 @@ Set the key `secure?` in the configuration file `config.clj`
  * Make sure you have the right `krb5.conf` at `/etc/krb5.conf` or you may set the jvm property `java.security.krb5.conf` to the location of your `krb5.conf` file.
 
 ## Usage
-
+```bash
+# start up lein from the root of the project
+lein repl
+```
 ```clojure
 (require '[clojure.java.io :as io])
 
-;; Copy a file on to the cluster
-(create "/tmp/file" (io/file "/home/rratti/file")) 
+;; Copy a file '/tmp/A' on to the cluster
+(create "/tmp/A" "/home/rratti/A")
+
+;; or
+(create "/tmp/A" (io/file "/home/rratti/A")) 
 
 ;; This works too
-(with-open [in (io/input-stream "/home/rratti/file")]
-  (create "/tmp/file" in))
+(with-open [in (io/input-stream "/home/rratti/A")]
+  (create "/tmp/A" in))
   
-;; The second arg. to create can be either a string, byte-array, inputstream or file
+;; The second arg. to 'create' can be either a string, byte-array, inputstream or file
 
-;; Copy a file from the cluster
-(with-open [in (open "/tmp/file")]
-  (io/copy in (io/file "/home/rratti/file")))
+;; Copy a file '/tmp/A' from the cluster
+(with-open [in (open "/tmp/A")]
+  (io/copy in (io/file "/home/rratti/A")))
   
-;; append to a file on the cluster
-(append "/tmp/file" (io/file "/home/rdsr/file")) 
+;; append to a file '/tmp/A' on the cluster
+(append "/tmp/A" "/home/rratti/B")
 
 ;; Similarly the second arg to append can be either a string, byte-array, inputstream or file
 
