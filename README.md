@@ -28,6 +28,7 @@ Set the key `secure?` in the configuration file `config.clj`
 lein repl
 ```
 ```clojure
+(use 'webhdfs-clj.core)
 (require '[clojure.java.io :as io])
 
 ;; Copy a file '/tmp/A' on to the cluster
