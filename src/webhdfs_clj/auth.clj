@@ -13,8 +13,8 @@
        (do (log/info "No user credentials provided in configuration")
            false)))
 
-(defn- secure?
-  [] ((u/cfg) :secure false))
+(defn secure?
+  [] ((u/cfg) :secure? false))
 
 (defn setup-auth!
   "Setups up default cookie manager for HttpURLConnection.

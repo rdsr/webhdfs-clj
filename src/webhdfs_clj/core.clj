@@ -38,10 +38,28 @@
   (into {} (for [[k v] opts :when (not (nil? v))]
              [(name k) (if (keyword? v) (name v) (str v))])))
 
+(def ^:private ^:dynamic doas-user nil)
+
+(defmacro doas [user call]
+  `(binding [doas-user ~user]
+    ~call))
+
+(defn- optionally-add-user
+  [query-opts]
+  (if (a/secure?) query-opts (assoc query-opts :user (u/cfg :user))))
+
+(defn- optionally-add-doas-user
+  [query-opts]
+  (assoc query-opts :doas (or doas-user (u/cfg :doas))))
+
 (defn- request [method uri opts]
   (let [url (abs-url uri)
         failure? (complement http/unexceptional-status?)
-        query-opts (-> opts :query-params query-params-as-strings)]
+        query-opts (-> opts
+                       :query-params
+                       optionally-add-user
+                       optionally-add-doas-user
+                       query-params-as-strings)]
     (log/info "Executing request, method:" method ", uri:" uri ", query:" query-opts)
     (let [{:keys [status body headers]}
           (http/request
@@ -52,8 +70,7 @@
                    (assoc opts :query-params query-opts)))]
       (log/info "Received status: " status)
       (cond
-        (failure? status)
-        (throw-exception (json/read-str body :key-fn keyword))
+        (failure? status) (throw-exception (json/read-str body :key-fn keyword))
         ;; Webhdfs REST API only returns TEMPORARY_REDIRECT in
         ;; cases of PUT and APPEND. In these cases, we pass
         ;; url back so that a separate request can we made
@@ -85,7 +102,7 @@
 ;; Webhdfs REST API methods
 ;; See http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/WebHDFS.html
 
-(defn open [uri {:keys [offset length buffersize]}]
+(defn open [uri & {:keys [offset length buffersize]}]
   (http-get uri
             {:op :open :offset offset :length length :buffersize buffersize}
             :as :stream
