@@ -8,8 +8,11 @@ A very light weight library without any Hadoop or Http client dependencies. Also
 ### Configuration
 The library expects a configuration file with name `conf/config.clj`. The file contains a clojure map with all the needed properties. See [conf/example-config.clj](conf/example-config.clj).
 
-### Taking to a secure Hadoop cluster.
-Set the key `:secure?` in the configuration file `config.clj`
+### Talking to a non-secure cluster
+Remove the `:secure?` key from `config.clj` (or set it to `false`) and add the key `:user` . The value of the `:user` key is passed as the query parameter `user.name` to authenticate to a non-secure cluster.
+
+### Talking to a secure Hadoop cluster.
+Set the key `:secure?` to `true` in the configuration file `config.clj`
 
 #### Using user credentials
  * Create a file `user.conf` similar to [conf/example-user.conf](conf/example-user.conf) under `conf` folder. Set the jvm property `java.security.auth.login.config` to `conf/user.conf`. (Infact `example-user.conf` can be used as is). When using a repl with [lein](https://github.com/technomancy/leiningen) the jvm properties can be specified in [project.clj](project.clj) under the key `:jvm-opts`.
