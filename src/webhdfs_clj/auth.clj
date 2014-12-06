@@ -8,7 +8,7 @@
 (defn- user-creds?
   "Returns true if user (principal) and passwords are
   provided in config file."
-  [] (if (and (contains? (u/cfg) :user) (contains? (u/cfg) :password))
+  [] (if (and (contains? (u/cfg) :principal) (contains? (u/cfg) :password))
        true
        (do (log/info "No user credentials provided in configuration")
            false)))
@@ -28,7 +28,7 @@
     (Authenticator/setDefault
       (proxy [Authenticator] []
         (getPasswordAuthentication []
-          (log/info "Registering password authentication for user: " (u/cfg :user))
+          (log/info "Registering password authentication for user: " (u/cfg :principal))
           (PasswordAuthentication.
-            (u/cfg :user)
+            (u/cfg :principal)
             (into-array Character/TYPE (u/cfg :password))))))))

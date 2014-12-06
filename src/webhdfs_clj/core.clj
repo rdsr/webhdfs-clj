@@ -16,7 +16,7 @@
 (defn- resolve-class [class-name]
   (try
     (resolve (symbol class-name))
-    (catch ClassNotFoundException _
+    (catch Exception _
       (log/warn "Could not resolve class" class-name ". Using IOException instead")
       IOException)))
 
@@ -52,6 +52,14 @@
   [query-opts]
   (assoc query-opts :doas (or doas-user (u/cfg :doas))))
 
+(defn- json->map [s]
+  (try
+    (json/read-str s :key-fn keyword)
+    (catch Exception _
+      {:RemoteException
+       {:javaClassName "java.lang.IllegalStateException"
+        :message (str "Could not parse content as json: Original content: " s)}})))
+
 (defn- request [method uri opts]
   (let [url (abs-url uri)
         failure? (complement http/unexceptional-status?)
@@ -70,7 +78,9 @@
                    (assoc opts :query-params query-opts)))]
       (log/info "Received status: " status)
       (cond
-        (failure? status) (throw-exception (json/read-str body :key-fn keyword))
+        (failure? status)
+
+        (throw-exception (json->map body))
         ;; Webhdfs REST API only returns TEMPORARY_REDIRECT in
         ;; cases of PUT and APPEND. In these cases, we pass
         ;; url back so that a separate request can we made
